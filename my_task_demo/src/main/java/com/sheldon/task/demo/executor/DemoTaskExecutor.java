@@ -18,21 +18,26 @@ public class DemoTaskExecutor {
 
     private final Condition allTasksComplete = lock.newCondition();
 
+    private final Condition writeComplete = lock.newCondition();
+
     private final BlockingQueue<Integer> resultsQueue = new LinkedBlockingQueue<>(2000);
 
-    // 提交任务的线程池，线程数为CPU核心数，避免oom
-    private final ExecutorService submitTaskExecutor = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+    // 提交任务的线程池，使用单线程
+    private final ExecutorService submitTaskExecutor = Executors.newSingleThreadExecutor();
     private final ExecutorCompletionService<Integer> completionService = new ExecutorCompletionService<>(submitTaskExecutor);
 
     // 写文件的线程池，使用单线程
     private final ExecutorService resultWriterExecutor = Executors.newSingleThreadExecutor();
 
     public void submitTasks() {
+        long startTimeMillis = System.currentTimeMillis();
+        System.out.println("submitTasks, time=" + startTimeMillis);
+
+        // 提交2000个计算任务
         for (int i = 0; i < 2000; i++) {
             CalculateTask calculateTask = new CalculateTask();
             completionService.submit(calculateTask);
         }
-        // 串行执行
         for (int i = 0; i < 2000; i++) {
             try {
                 Future<Integer> future = completionService.take();
@@ -44,6 +49,8 @@ public class DemoTaskExecutor {
                 e.printStackTrace();
             }
         }
+        submitTaskExecutor.shutdown();
+
         // 任务量为2000，可以等待所有任务完成后再写文件
         resultWriterExecutor.submit(() -> {
             lock.lock();
@@ -51,13 +58,28 @@ public class DemoTaskExecutor {
                 while (resultsQueue.size() < 2000) {
                     allTasksComplete.await();
                 }
-                resultWriterExecutor.submit(new WriteResultTask());
+                new WriteResultTask().run();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             } finally {
                 lock.unlock();
             }
         });
+        // 等待写文件的任务完成后关闭线程池
+        lock.lock();
+        try {
+            while (!resultsQueue.isEmpty()) {
+                writeComplete.await();
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            lock.unlock();
+        }
+        resultWriterExecutor.shutdown();
+
+        System.out.println("submitTasks finish, time=" + System.currentTimeMillis());
+        System.out.println("submitTasks cost=" + (System.currentTimeMillis() - startTimeMillis) + "ms");
     }
 
     public void cancelTasks() {
@@ -151,6 +173,8 @@ public class DemoTaskExecutor {
                     writer.write(String.valueOf(resultsQueue.poll()));
                     writer.newLine();
                 }
+                writeComplete.signal();
+                System.out.println("write result to file finish");
             } catch (IOException e) {
                 e.printStackTrace();
             }
