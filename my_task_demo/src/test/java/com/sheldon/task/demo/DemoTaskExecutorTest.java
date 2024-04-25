@@ -34,7 +34,7 @@ public class DemoTaskExecutorTest {
 
     @BeforeEach
     void setUp() throws NoSuchFieldException, IllegalAccessException {
-        Field randomNumberExecutorField = DemoTaskExecutor.class.getDeclaredField("randomNumberExecutor");
+        Field randomNumberExecutorField = DemoTaskExecutor.class.getDeclaredField("submitTaskExecutor");
         randomNumberExecutorField.setAccessible(true);
         randomNumberExecutor = (ExecutorService) randomNumberExecutorField.get(demoTaskExecutor);
 
@@ -63,7 +63,7 @@ public class DemoTaskExecutorTest {
     void testCancelTasks() throws InterruptedException {
         demoTaskExecutor.submitTasks();
         // 等待任务完成
-        Thread.sleep(20000);
+        Thread.sleep(5000);
 
         demoTaskExecutor.cancelTasks();
         assertTrue(randomNumberExecutor.isShutdown());
@@ -75,7 +75,7 @@ public class DemoTaskExecutorTest {
     void testCalculateTask() throws InterruptedException {
         demoTaskExecutor.submitTasks();
         // 等待任务完成
-        Thread.sleep(20000);
+        Thread.sleep(5000);
 
         // 读取result.txt文件，并计算结果个数
         try (Stream<String> lines = Files.lines(Paths.get("result.txt"))) {
@@ -90,7 +90,7 @@ public class DemoTaskExecutorTest {
     void testWriteResultTask() throws InterruptedException {
         demoTaskExecutor.submitTasks();
         // 等待任务完成
-        Thread.sleep(10000);
+        Thread.sleep(5000);
 
         demoTaskExecutor.cancelTasks();
         assertTrue(resultsQueue.isEmpty());
